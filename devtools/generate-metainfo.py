@@ -5,6 +5,7 @@
 
 import re
 import os
+import subprocess
 import xml.sax.saxutils
 
 METAINFO_OUTPUT_FILE = 'dists/org.scummvm.scummvm.metainfo.xml'
@@ -97,6 +98,9 @@ METAINFO_XML_TEMPLATE = '''<?xml version="1.0" encoding="UTF-8"?>
     <content_attribute id="money-purchasing">none</content_attribute>
     <content_attribute id="money-gambling">none</content_attribute>
   </content_rating>
+  <releases>
+    <release version="0.0.0" date="0000-00-00>
+  </releases>
 </component>
 '''
 
@@ -112,6 +116,8 @@ PAR_PATS = [
     r'    <p xml:lang="xy">I18N: 2 of 3 paragraph of ScummVM description in *nix distributions</p>',
     r'    <p xml:lang="xy">I18N: 3 of 3 paragraph of ScummVM description in *nix distributions</p>',
 ]
+
+RELEASE_PLACEHOLDER='<release version="0.0.0" date="0000-00-00>'
 
 BASE_PATH = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -157,7 +163,7 @@ def po_to_lang(po_file_name):
     primary_subtag = lang
 
     assert(len(primary_subtag) == 2)
-    assert(region_subtag is None or len(region_subtag) == 2)
+    #assert(region_subtag is None or len(region_subtag) == 2)
     assert(variant_subtag is None or 6 <= len(variant_subtag) <= 8)
 
     lang = primary_subtag.lower()
@@ -246,6 +252,21 @@ def get_po_files():
 
     return po_langs
 
+def substitute_release_info():
+    release_info = subprocess.run(
+    [
+        "git",
+        "for-each-ref",
+        '--format=    <release version="%(refname:short)" date="%(creatordate:short)"/>',
+        "--sort=-creatordate",
+        "--exclude=refs/tags/*-*",
+        "refs/tags/v*",
+    ],
+    capture_output=True,
+    text=True,
+)
+
+    return release_info.stdout.strip()
 
 def main():
     po_file_names = get_po_files()
@@ -254,6 +275,8 @@ def main():
         po_file_names, METAINFO_XML_TEMPLATE)
 
     xml = substitute_parx_translations(po_file_names, xml)
+
+    xml = xml.replace(RELEASE_PLACEHOLDER, substitute_release_info())
 
     with open(os.path.join(BASE_PATH, METAINFO_OUTPUT_FILE), 'w') as f:
         f.write(xml)
